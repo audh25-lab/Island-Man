@@ -1,0 +1,10 @@
+---
+
+### ⚙️ `.gitignore`
+```gitignore
+# OS and editor junk
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
