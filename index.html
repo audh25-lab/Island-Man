@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Island-Man 🌴</title>
+<style>
+html,body{margin:0;padding:0;background:#0099aa;overflow:hidden;height:100%;}
+canvas{display:block;margin:auto;background:radial-gradient(circle at center,#00c4cc 0%,#007a7a 100%);}
+#score{position:absolute;top:10px;left:10px;color:white;font-family:sans-serif;font-size:18px;}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="score">Shells: 0</div>
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+canvas.width=window.innerWidth;
+canvas.height=window.innerHeight;
+const tile=24;
+let cols=Math.floor(canvas.width/tile);
+let rows=Math.floor(canvas.height/tile);
+let maze=[],player,ghosts=[],shells=[],score=0;
+const keys={};
+
+// AUDIO
+const audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+function playTone(freq,dur,vol=0.1,type="sine"){
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.type=type;o.frequency.value=freq;g.gain.value=vol;
+  o.connect(g);g.connect(audioCtx.destination);o.start();
+  o.stop(audioCtx.currentTime+dur);
+}
+function waveAmbience(){
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.type="sine";o.frequency.value=0.2;g.gain.value=0.05;
+  o.connect(g);g.connect(audioCtx.destination);
+  o.start();return()=>{o.stop();}
+}
+let stopWaves=waveAmbience();
+
+// MAZE
+function generateMaze(){
+  maze=[];
+  for(let y=0;y<rows;y++){
+    maze[y]=[];
+    for(let x=0;x<cols;x++){
+      maze[y][x]=(Math.random()<0.2)?1:0;
+    }
+  }
+  for(let x=0;x<cols;x++){maze[0][x]=1;maze[rows-1][x]=1;}
+  for(let y=0;y<rows;y++){maze[y][0]=1;maze[y][cols-1]=1;}
+}
+
+// ENTITIES
+function spawnPlayer(){player={x:1,y:1,dx:0,dy:0};}
+function spawnGhosts(){
+  ghosts=[];
+  for(let i=0;i<4;i++){
+    ghosts.push({x:cols-2-i,y:rows-2,dx:0,dy:0,color:`hsl(${Math.random()*360},80%,60%)`});
+  }
+}
+function spawnShells(){
+  shells=[];
+  for(let i=0;i<40;i++){
+    let x=Math.floor(Math.random()*cols),y=Math.floor(Math.random()*rows);
+    if(maze[y][x]===0) shells.push({x,y});
+  }
+}
+
+// INPUT
+window.addEventListener("keydown",e=>{
+  keys[e.key]=true;
+  if(audioCtx.state==="suspended")audioCtx.resume();
+});
+window.addEventListener("keyup",e=>keys[e.key]=false);
+
+// LOOP
+function update(){
+  if(keys["ArrowUp"]) {player.dy=-1;player.dx=0;}
+  if(keys["ArrowDown"]) {player.dy=1;player.dx=0;}
+  if(keys["ArrowLeft"]) {player.dx=-1;player.dy=0;}
+  if(keys["ArrowRight"]) {player.dx=1;player.dy=0;}
+  let nx=player.x+player.dx,ny=player.y+player.dy;
+  if(maze[ny]&&maze[ny][nx]===0){player.x=nx;player.y=ny;}
+  for(let i=shells.length-1;i>=0;i--){
+    if(shells[i].x===player.x && shells[i].y===player.y){
+      shells.splice(i,1);score++;document.getElementById("score").innerText="Shells: "+score;
+      playTone(440+Math.random()*200,0.1,0.1);
+      if(score%10===0) tideShift();
+    }
+  }
+  ghosts.forEach(g=>{
+    if(Math.random()<0.2){
+      const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+      const [dx,dy]=dirs[Math.floor(Math.random()*4)];
+      if(maze[g.y+dy]&&maze[g.y+dy][g.x+dx]===0){g.dx=dx;g.dy=dy;}
+    }
+    const gx=g.x+g.dx,gy=g.y+g.dy;
+    if(maze[gy]&&maze[gy][gx]===0){g.x=gx;g.y=gy;}
+    if(Math.abs(g.x-player.x)<1&&Math.abs(g.y-player.y)<1){score=0;spawnPlayer();playTone(100,0.4,0.2,"square");}
+  });
+}
+
+function tideShift(){
+  for(let y=1;y<rows-1;y++){
+    for(let x=1;x<cols-1;x++){
+      if(Math.random()<0.01) maze[y][x]=maze[y][x]?0:1;
+    }
+  }
+  spawnShells();
+}
+
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  for(let y=0;y<rows;y++){
+    for(let x=0;x<cols;x++){
+      if(maze[y][x]===1){
+        ctx.fillStyle="#004d4d";
+        ctx.fillRect(x*tile,y*tile,tile,tile);
+      }
+    }
+  }
+  ctx.fillStyle="gold";
+  shells.forEach(s=>{
+    ctx.beginPath();
+    ctx.arc(s.x*tile+tile/2,s.y*tile+tile/2,tile/6,0,Math.PI*2);
+    ctx.fill();
+  });
+  ctx.fillStyle="#ffeeaa";
+  ctx.beginPath();
+  ctx.arc(player.x*tile+tile/2,player.y*tile+tile/2,tile/2.3,0,Math.PI*2);
+  ctx.fill();
+  ghosts.forEach(g=>{
+    ctx.fillStyle=g.color;
+    ctx.beginPath();
+    ctx.arc(g.x*tile+tile/2,g.y*tile+tile/2,tile/2.3,0,Math.PI*2);
+    ctx.fill();
+  });
+}
+
+function loop(){update();draw();requestAnimationFrame(loop);}
+generateMaze();spawnPlayer();spawnGhosts();spawnShells();loop();
+</script>
+</body>
+</html>
